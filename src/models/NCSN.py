@@ -59,13 +59,8 @@ class NCSN(nn.Module):
             (B, C, H, W) estimated scores (gradients)
         """
         # Get scores from network
+        # Return raw network output without dividing by sigma
         scores = self.score_net(x, labels)
-
-        # The score network outputs the score scaled by sigma
-        # We need to divide by sigma to get the actual score
-        # This is based on the parameterization in Song & Ermon (2019)
-        used_sigmas = self.sigmas[labels].view(-1, 1, 1, 1)
-        scores = scores / used_sigmas
 
         return scores
 
