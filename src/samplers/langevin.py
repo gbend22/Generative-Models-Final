@@ -149,7 +149,11 @@ class LangevinDynamics:
         for step in tqdm(range(self.n_steps), desc=f'Langevin σ={sigma_idx}'):
             noise = torch.randn_like(x)
             scores = model(x, labels)
-            x = x + self.step_size * scores + torch.sqrt(2 * self.step_size) * noise
+            x = x + self.step_size * scores + torch.sqrt(2 * torch.tensor(
+    self.step_size,
+    device=device,
+    dtype=x.dtype
+)) * noise
 
         return torch.clamp(x, -1.0, 1.0)
 
