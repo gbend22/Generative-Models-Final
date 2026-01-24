@@ -7,7 +7,7 @@ Song & Ermon, NeurIPS 2019
 import torch
 import torch.nn as nn
 import numpy as np
-from unet import RefineNetUNet
+from .unet import RefineNetUNet
 
 
 class NCSN(nn.Module):
