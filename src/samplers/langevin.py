@@ -161,7 +161,7 @@ def get_sampler(config, sigmas):
 
 if __name__ == '__main__':
     # Test sampler
-    from src.models.ncsn import NCSN
+    from src.models.NCSN import NCSN
     from configs.ncsn_cifar10 import config
 
     device = 'cuda' if torch.cuda.is_available() else 'cpu'

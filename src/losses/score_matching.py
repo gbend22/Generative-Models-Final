@@ -186,7 +186,7 @@ def get_loss_fn(config):
 
 if __name__ == '__main__':
     # Test loss function
-    from src.models.ncsn import NCSN
+    from src.models.NCSN import NCSN
     from configs.ncsn_cifar10 import config
 
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
