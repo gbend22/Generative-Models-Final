@@ -85,7 +85,11 @@ class AnnealedLangevinDynamics:
                 scores = model(x, labels)
 
                 # Langevin update: x ← x + ε*s_θ(x,σ) + sqrt(2ε)*z
-                x = x + step_size * scores + torch.sqrt(2 * step_size) * noise
+                x = x + step_size * scores + torch.sqrt(2 * torch.tensor(
+    step_size,
+    device=device,
+    dtype=x.dtype
+)) * noise
 
             if return_intermediate:
                 intermediate_samples.append(x.clone().cpu())
