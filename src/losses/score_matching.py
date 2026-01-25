@@ -78,12 +78,9 @@ class DenoisingScoreMatching(nn.Module):
 
         # Get score estimate from model
         # Model outputs s_θ(x̃, σ)
-        target = -noise / (used_sigmas ** 2)  # True conditional score
+        target = -noise / used_sigmas
         scores = model(perturbed_x, labels)
-
-        # Compute loss with importance weighting
-        loss_weight = self.get_loss_weight(used_sigmas)
-        losses = loss_weight * ((scores - target) ** 2)
+        losses =  ((scores - target) ** 2)
 
         # Average over all dimensions
         loss = torch.mean(losses)
@@ -151,12 +148,10 @@ class AnnealedDenoisingScoreMatching(nn.Module):
             # Map to corresponding indices in full sigma range
             full_labels = (labels * len(self.sigmas) // len(active_sigmas)).long()
 
-        target = -noise / (used_sigmas ** 2)
+        target = -noise / used_sigmas
         scores = model(perturbed_x, full_labels)
 
-        # Compute weighted loss
-        loss_weight = used_sigmas ** 2
-        losses = loss_weight * ((scores - target) ** 2)
+        losses =  ((scores - target) ** 2)
         loss = torch.mean(losses)
 
         loss_dict = {
