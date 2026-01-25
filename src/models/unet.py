@@ -1,193 +1,43 @@
-"""
-U-Net architecture for NCSN
-Based on RefineNet architecture from Song & Ermon (2019)
-Implements a conditional U-Net that takes noise level as input
-"""
-
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import numpy as np
 
-
-class ConditionalInstanceNorm2d(nn.Module):
-    """
-    Conditional Instance Normalization
-    Modulates the normalization parameters based on noise level
-    """
-
-    def __init__(self, num_features, num_classes):
+class ResidualBlock(nn.Module):
+    def __init__(self, in_ch, out_ch):
         super().__init__()
-        self.num_features = num_features
-        self.instance_norm = nn.InstanceNorm2d(num_features, affine=False)
+        self.conv1 = nn.Conv2d(in_ch, out_ch, 3, padding=1)
+        self.conv2 = nn.Conv2d(out_ch, out_ch, 3, padding=1)
+        self.skip = nn.Conv2d(in_ch, out_ch, 1) if in_ch != out_ch else nn.Identity()
 
-        # Learnable scale and bias for each noise level
-        self.embed = nn.Embedding(num_classes, num_features * 2)
-        self.embed.weight.data[:, :num_features].normal_(1, 0.02)  # gamma
-        self.embed.weight.data[:, num_features:].zero_()  # beta
-
-    def forward(self, x, y):
-        """
-        x: (B, C, H, W)
-        y: (B,) noise level indices
-        """
-        h = self.instance_norm(x)
-        gamma, beta = self.embed(y).chunk(2, dim=1)
-        gamma = gamma.view(-1, self.num_features, 1, 1)
-        beta = beta.view(-1, self.num_features, 1, 1)
-        return gamma * h + beta
-
-
-class ConditionalResidualBlock(nn.Module):
-    """
-    Residual block with conditional instance normalization
-    """
-
-    def __init__(self, in_channels, out_channels, num_classes, resample=None, dropout=0.1):
-        super().__init__()
-        self.in_channels = in_channels
-        self.out_channels = out_channels
-        self.resample = resample
-
-        # First conv block
-        self.norm1 = ConditionalInstanceNorm2d(in_channels, num_classes)
-        self.conv1 = nn.Conv2d(in_channels, out_channels, 3, padding=1)
-
-        # Second conv block
-        self.norm2 = ConditionalInstanceNorm2d(out_channels, num_classes)
-        self.dropout = nn.Dropout(dropout)
-        self.conv2 = nn.Conv2d(out_channels, out_channels, 3, padding=1)
-
-        # Skip connection
-        if in_channels != out_channels or resample:
-            self.shortcut = nn.Conv2d(in_channels, out_channels, 1)
-        else:
-            self.shortcut = nn.Identity()
-
-    def forward(self, x, y):
-        """
-        x: (B, C, H, W)
-        y: (B,) noise level indices
-        """
-        h = self.norm1(x, y)
-        h = F.relu(h)
-
-        # Resample if needed
-        if self.resample == 'down':
-            h = F.avg_pool2d(h, 2)
-            x = F.avg_pool2d(x, 2)
-        elif self.resample == 'up':
-            h = F.interpolate(h, scale_factor=2, mode='nearest')
-            x = F.interpolate(x, scale_factor=2, mode='nearest')
-
-        h = self.conv1(h)
-        h = self.norm2(h, y)
-        h = F.relu(h)
-        h = self.dropout(h)
+    def forward(self, x):
+        h = F.relu(self.conv1(x))
         h = self.conv2(h)
+        return F.relu(h + self.skip(x))
 
-        return h + self.shortcut(x)
-
-
-class RefineBlock(nn.Module):
-    """
-    RefineNet block for multi-scale feature fusion
-    """
-
-    def __init__(self, in_channels, out_channels, num_classes):
+class UNet(nn.Module):
+    def __init__(self, in_channels=3, base_channels=64):
         super().__init__()
-        self.conv1 = ConditionalResidualBlock(in_channels, out_channels, num_classes)
-        self.conv2 = ConditionalResidualBlock(out_channels, out_channels, num_classes)
 
-    def forward(self, x, y):
-        h = self.conv1(x, y)
-        h = self.conv2(h, y)
-        return h
+        self.down1 = ResidualBlock(in_channels, base_channels)
+        self.down2 = ResidualBlock(base_channels, base_channels * 2)
+        self.down3 = ResidualBlock(base_channels * 2, base_channels * 4)
 
+        self.up2 = ResidualBlock(base_channels * 4, base_channels * 2)
+        self.up1 = ResidualBlock(base_channels * 2, base_channels)
 
-class RefineNetUNet(nn.Module):
-    """
-    RefineNet-based U-Net for NCSN
-    Architecture follows Song & Ermon (2019)
-    """
+        self.out = nn.Conv2d(base_channels, in_channels, 1)
 
-    def __init__(self, image_channels=3, ngf=128, num_classes=10):
-        super().__init__()
-        self.ngf = ngf
-        self.num_classes = num_classes
+        self.pool = nn.AvgPool2d(2)
 
-        # Initial convolution
-        self.conv_first = nn.Conv2d(image_channels, ngf, 3, padding=1)
+    def forward(self, x):
+        d1 = self.down1(x)
+        d2 = self.down2(self.pool(d1))
+        d3 = self.down3(self.pool(d2))
 
-        # Encoder (downsampling path)
-        self.down1 = ConditionalResidualBlock(ngf, ngf, num_classes)
-        self.down2 = ConditionalResidualBlock(ngf, ngf * 2, num_classes, resample='down')
-        self.down3 = ConditionalResidualBlock(ngf * 2, ngf * 2, num_classes, resample='down')
+        u2 = F.interpolate(d3, scale_factor=2)
+        u2 = self.up2(u2 + d2)
 
-        # Middle (bottleneck)
-        self.middle = ConditionalResidualBlock(ngf * 2, ngf * 2, num_classes)
+        u1 = F.interpolate(u2, scale_factor=2)
+        u1 = self.up1(u1 + d1)
 
-        # Decoder (upsampling path)
-        self.up1 = ConditionalResidualBlock(ngf * 2, ngf * 2, num_classes, resample='up')
-        self.up2 = ConditionalResidualBlock(ngf * 2, ngf, num_classes, resample='up')
-        self.up3 = ConditionalResidualBlock(ngf, ngf, num_classes)
-
-        # RefineNet blocks for feature fusion
-        self.refine1 = RefineBlock(ngf * 4, ngf * 2, num_classes)
-        self.refine2 = RefineBlock(ngf * 2, ngf, num_classes)
-
-        # Final normalization and output
-        self.norm_final = ConditionalInstanceNorm2d(ngf, num_classes)
-        self.conv_final = nn.Conv2d(ngf, image_channels, 3, padding=1)
-
-    def forward(self, x, y):
-        """
-        x: (B, C, H, W) input images
-        y: (B,) noise level indices
-        Returns: (B, C, H, W) score estimates
-        """
-        # Initial features
-        h = self.conv_first(x)
-
-        # Encoder
-        h1 = self.down1(h, y)  # (B, ngf, 32, 32)
-        h2 = self.down2(h1, y)  # (B, ngf*2, 16, 16)
-        h3 = self.down3(h2, y)  # (B, ngf*2, 8, 8)
-
-        # Bottleneck
-        h = self.middle(h3, y)  # (B, ngf*2, 8, 8)
-
-        # Decoder with skip connections
-        h = self.up1(h, y)  # (B, ngf*2, 16, 16)
-        h = torch.cat([h, h2], dim=1)  # (B, ngf*4, 16, 16)
-        h = self.refine1(h, y)  # (B, ngf*2, 16, 16)
-
-        h = self.up2(h, y)  # (B, ngf, 32, 32)
-        h = torch.cat([h, h1], dim=1)  # (B, ngf*2, 32, 32)
-        h = self.refine2(h, y)  # (B, ngf, 32, 32)
-
-        h = self.up3(h, y)  # (B, ngf, 32, 32)
-
-        # Final output
-        h = self.norm_final(h, y)
-        h = F.relu(h)
-        h = self.conv_final(h)
-
-        return h
-
-
-if __name__ == '__main__':
-    # Test the model
-    device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    model = RefineNetUNet(image_channels=3, ngf=128, num_classes=10).to(device)
-
-    # Test forward pass
-    batch_size = 4
-    x = torch.randn(batch_size, 3, 32, 32).to(device)
-    y = torch.randint(0, 10, (batch_size,)).to(device)
-
-    output = model(x, y)
-    print(f"Input shape: {x.shape}")
-    print(f"Noise levels: {y}")
-    print(f"Output shape: {output.shape}")
-    print(f"Number of parameters: {sum(p.numel() for p in model.parameters()):,}")
+        return self.out(u1)
