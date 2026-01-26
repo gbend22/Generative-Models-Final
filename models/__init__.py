@@ -1,4 +1,4 @@
-from .ncsn import NCSN, ExponentialMovingAverage
-from .refineNet import RefineNetUNet
+from .ncsn import NCSN
+from .refineNet import RefineNet
 
-__all__ = ['NCSN', 'ExponentialMovingAverage', 'RefineNetUNet']
+__all__ = ['NCSN', 'RefineNet']
