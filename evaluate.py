@@ -3,16 +3,14 @@ Evaluation script for NCSN
 Compute FID and Inception Score
 """
 
-import os
 import argparse
 import torch
-import numpy as np
 from tqdm import tqdm
 
-from src.models.NCSN import NCSN, ExponentialMovingAverage
+from models.ncsn import NCSN, ExponentialMovingAverage
 from src.samplers.langevin import get_sampler
-from src.datasets.cifar10 import get_cifar10_dataloaders
-from src.utils.metrics import calculate_fid, calculate_inception_score, InceptionV3
+from datasets import get_cifar10_dataloaders
+from utils.metrics import calculate_fid, calculate_inception_score, InceptionV3
 
 
 def load_model(checkpoint_path, device):
