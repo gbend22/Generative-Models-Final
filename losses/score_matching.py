@@ -69,15 +69,16 @@ class DenoisingScoreMatchingLoss(nn.Module):
         # Target: -ε/σ (negative noise scaled by sigma)
         target = -noise / used_sigmas
 
+        # FIXED: Use mean instead of sum to keep loss values reasonable
         # MSE loss between predicted score and target
-        loss = ((scores - target) ** 2).sum(dim=(1, 2, 3)).mean()
+        loss = ((scores - target) ** 2).mean()  # Mean over all dimensions
 
         # Per-noise-level losses (for analysis)
         loss_dict = {}
         for i in range(len(self.sigmas)):
             mask = (labels == i)
             if mask.sum() > 0:
-                level_loss = ((scores[mask] - target[mask]) ** 2).sum(dim=(1, 2, 3)).mean()
+                level_loss = ((scores[mask] - target[mask]) ** 2).mean()
                 loss_dict[f'loss_sigma_{i}'] = level_loss.item()
 
         return loss, loss_dict
@@ -101,7 +102,7 @@ class AnnealedDenoisingScoreLoss(nn.Module):
             sigmas: Noise levels
             weighting: How to weight different noise levels
                 - 'uniform': Equal weight
-                - 'exponential': Higher noise gets more weight
+                - 'exponential': Higher noise gets more weight (sigma^2)
                 - 'inverse': Weight by 1/σ²
         """
         super().__init__()
@@ -113,6 +114,7 @@ class AnnealedDenoisingScoreLoss(nn.Module):
             self.weights = torch.ones_like(sigmas)
         elif weighting == 'exponential':
             # Higher noise gets exponentially more weight
+            # This is the standard weighting from the paper
             self.weights = sigmas ** 2
         elif weighting == 'inverse':
             # Weight by 1/σ²
@@ -120,8 +122,8 @@ class AnnealedDenoisingScoreLoss(nn.Module):
         else:
             raise ValueError(f"Unknown weighting: {weighting}")
 
-        # Normalize weights
-        self.weights = self.weights / self.weights.sum()
+        # Normalize weights to sum to num_levels (keeps loss scale reasonable)
+        self.weights = self.weights / self.weights.sum() * len(self.sigmas)
 
     def forward(self, model, x):
         """
@@ -146,6 +148,7 @@ class AnnealedDenoisingScoreLoss(nn.Module):
 
         # Get noise levels
         used_sigmas = self.sigmas[labels].view(-1, 1, 1, 1)
+        used_weights = self.weights[labels].view(-1, 1, 1, 1).to(x.device)
 
         # Perturb data
         noise = torch.randn_like(x)
@@ -154,14 +157,18 @@ class AnnealedDenoisingScoreLoss(nn.Module):
         # Get scores
         scores, _ = model(perturbed_x, labels)
 
-        # Target
+        # Target: -ε/σ
         target = -noise / used_sigmas
 
-        # Compute loss with weighting
-        per_sample_loss = ((scores - target) ** 2).sum(dim=(1, 2, 3))
+        # FIXED: Compute loss properly
+        # 1. Compute per-sample MSE
+        per_sample_loss = ((scores - target) ** 2).mean(dim=(1, 2, 3))
 
-        # Weight by sigma (already sampled according to weights, but can add explicit weighting)
-        loss = per_sample_loss.mean()
+        # 2. Apply weighting
+        weighted_loss = per_sample_loss * used_weights.squeeze()
+
+        # 3. Average across batch
+        loss = weighted_loss.mean()
 
         # Per-noise-level logging
         loss_dict = {}
@@ -257,6 +264,7 @@ if __name__ == "__main__":
     loss, loss_dict = dsm_loss(model, x)
 
     print(f"\nTotal loss: {loss.item():.4f}")
+    print(f"Loss should be in range [0.1, 10.0] for random init")
     print(f"Per-level losses:")
     for key, val in loss_dict.items():
         print(f"  {key}: {val:.4f}")
@@ -270,6 +278,7 @@ if __name__ == "__main__":
     loss, loss_dict = annealed_loss(model, x)
 
     print(f"\nTotal loss: {loss.item():.4f}")
+    print(f"Loss should be in range [0.1, 10.0] for random init")
     print(f"Per-level losses and weights:")
     for i in range(len(model.sigmas)):
         if f'loss_sigma_{i}' in loss_dict:
@@ -277,3 +286,7 @@ if __name__ == "__main__":
                   f"weight={loss_dict[f'weight_sigma_{i}']:.4f}")
 
     print("\n✓ Loss functions working correctly!")
+    print(f"\nExpected behavior:")
+    print(f"  - Losses should be O(1) magnitude (0.1 - 10)")
+    print(f"  - NOT O(1000) or higher")
+    print(f"  - Higher sigma levels should have slightly higher loss initially")
