@@ -11,20 +11,15 @@ class NCSNConfig:
     num_workers = 2
     device = 'cuda'
 
-    # --- CRITICAL FIXES BELOW ---
-
     # NCSN specific
-    # 50.0 was too high for [0,1] data. 1.0 is standard for CIFAR-10.
-    sigma_start = 1.0
+    sigma_start = 50.0
     sigma_end = 0.01
     num_scales = 10
 
-    # Sampling
+    # Sampling / Annealed Langevin Dynamics
     n_steps_per_scale = 100
+    step_lr = 2e-6
 
-    # We increase this slightly because our sigma ratio is now smaller
-    step_lr = 1e-5
-
-    # VISUALIZATION
-    sample_interval = 5
-    n_samples_to_show = 16
+    # VISUALIZATION (New)
+    sample_interval = 5  # Generate images every 5 epochs
+    n_samples_to_show = 16  # How many images to generate
