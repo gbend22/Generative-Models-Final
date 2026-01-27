@@ -87,7 +87,7 @@ def dsm_loss(
         'loss': loss.item(),
         'mse_unweighted': squared_error.mean().item(),
         'sigma_mean': used_sigmas.mean().item(),
-        'score_norm': predicted_score.norm(dim=(1, 2, 3)).mean().item(),
+        'score_norm': predicted_score.reshape(x.shape[0], -1).norm(dim=1).mean().item(),  # ← FIX THIS LINE
     }
 
     return loss, info
