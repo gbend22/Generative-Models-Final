@@ -1,0 +1,56 @@
+# NCSN Configuration for CIFAR-10
+# Based on Song & Ermon (2019, 2020)
+
+data:
+  dataset: cifar10
+  image_size: 32
+  channels: 3
+  num_workers: 4
+
+model:
+  # RefineNet architecture parameters
+  ngf: 128                    # Base number of filters
+  num_classes: 10             # Number of noise levels (L)
+
+noise:
+  # Noise schedule (geometric sequence)
+  # σ_1 should be large enough to cover data range
+  # σ_L should be small enough for fine details
+  sigma_begin: 50.0           # Largest noise level (σ_1)
+  sigma_end: 0.01             # Smallest noise level (σ_L)
+
+training:
+  batch_size: 128
+  num_epochs: 500
+
+  # Optimizer settings
+  lr: 1.0e-4
+  weight_decay: 0.0
+  beta1: 0.9
+  beta2: 0.999
+
+  # EMA for model weights (from NCSNv2)
+  use_ema: true
+  ema_rate: 0.999
+
+  # Gradient clipping
+  grad_clip: 1.0
+
+  # Logging
+  log_interval: 100           # Log every N iterations
+  save_interval: 10           # Save checkpoint every N epochs
+  sample_interval: 10         # Generate samples every N epochs
+
+sampling:
+  # Annealed Langevin dynamics parameters
+  num_steps: 100              # Number of Langevin steps per noise level (T)
+  step_lr: 2.0e-5             # Base step size (ε)
+  denoise: true               # Apply denoising at final step
+
+  # Sample generation
+  num_samples: 64             # Number of samples to generate
+
+wandb:
+  project: "ncsn-cifar10"
+  entity: null                # Set your W&B username/team
+  name: "ncsn-baseline"

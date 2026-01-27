@@ -1,7 +1,22 @@
-torch
-torchvision
-numpy
-matplotlib
-wandb
-tqdm
-scipy
+# Core dependencies
+torch>=1.10.0
+torchvision>=0.11.0
+numpy>=1.21.0
+
+# Logging and visualization
+wandb>=0.12.0
+matplotlib>=3.4.0
+tqdm>=4.62.0
+
+# Evaluation metrics
+scikit-image>=0.18.0
+scipy>=1.7.0
+
+# Configuration
+pyyaml>=5.4.0
+
+# For FID computation
+pytorch-fid>=0.2.1
+
+# Notebook support (for Colab)
+ipywidgets>=7.6.0
