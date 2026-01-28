@@ -18,7 +18,7 @@ class NCSNConfig:
 
     # Sampling / Annealed Langevin Dynamics
     n_steps_per_scale = 100  # Paper: T = 100
-    step_lr = 2e-5  # Paper: epsilon = 2 x 10^-5 (was 2e-6)
+    step_lr = 2e-5  # Paper value
 
     # VISUALIZATION (New)
     sample_interval = 5  # Generate images every 5 epochs
