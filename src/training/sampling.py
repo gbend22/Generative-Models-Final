@@ -1,5 +1,4 @@
 import torch
-import numpy as np
 from tqdm import tqdm
 
 
@@ -16,9 +15,8 @@ def annealed_langevin_dynamics(model, sigmas, config, n_samples=16):
     device = config.device
     model.eval()
 
-    # 1. Initialize with uniform random noise in [0, 1] range
-    # Paper uses uniform noise as initial samples
-    x = torch.rand(n_samples, config.channels, config.image_size, config.image_size, device=device)
+    # 1. Initialize with Gaussian noise
+    x = torch.randn(n_samples, config.channels, config.image_size, config.image_size, device=device)
 
     # 2. Iterate through noise levels (Annealing)
     with torch.no_grad():
@@ -40,13 +38,10 @@ def annealed_langevin_dynamics(model, sigmas, config, n_samples=16):
                 # Predict Score s(x, sigma)
                 score = model(x, sigma_batch)
 
-                # Clip score to prevent explosion (numerical stability)
-                score = torch.clamp(score, -1e4, 1e4)
-
                 # Update x using Langevin Dynamics Rule:
                 # x_{t+1} = x_t + (step_size/2) * score + sqrt(step_size) * z
                 gradient_term = 0.5 * step_size * score
-                noise_term = np.sqrt(step_size) * z
+                noise_term = torch.sqrt(torch.tensor(step_size, device=device)) * z
 
                 x = x + gradient_term + noise_term
 

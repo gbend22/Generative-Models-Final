@@ -1,13 +1,14 @@
 import torch
 import torch.optim as optim
+from torch.optim.lr_scheduler import CosineAnnealingLR, LinearLR, SequentialLR
 from tqdm import tqdm
 import wandb
 import os
 import torchvision
 
 from src.training.loss import denoising_score_matching_loss
-from src.utils import get_sigmas, save_checkpoint
-from src.training.sampling import annealed_langevin_dynamics  # Import sampling logic
+from src.utils import get_sigmas, save_checkpoint, EMAHelper
+from src.training.sampling import annealed_langevin_dynamics
 
 
 def train_ncsn(model, dataloader, config, plot_callback=None):
@@ -22,6 +23,16 @@ def train_ncsn(model, dataloader, config, plot_callback=None):
     device = config.device
     model = model.to(device)
     optimizer = optim.Adam(model.parameters(), lr=config.lr)
+
+    # Learning rate schedule: warmup + cosine decay
+    warmup_epochs = 5
+    warmup_scheduler = LinearLR(optimizer, start_factor=1e-2, end_factor=1.0, total_iters=warmup_epochs)
+    cosine_scheduler = CosineAnnealingLR(optimizer, T_max=config.n_epochs - warmup_epochs, eta_min=1e-5)
+    scheduler = SequentialLR(optimizer, schedulers=[warmup_scheduler, cosine_scheduler], milestones=[warmup_epochs])
+
+    # EMA for stable sampling
+    ema = EMAHelper(model, decay=0.999)
+    ema.shadow.to(device)
 
     sigmas = get_sigmas(config).to(device)
 
@@ -40,7 +51,9 @@ def train_ncsn(model, dataloader, config, plot_callback=None):
             optimizer.zero_grad()
             loss = denoising_score_matching_loss(model, x, sigmas)
             loss.backward()
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
             optimizer.step()
+            ema.update(model)
 
             avg_loss += loss.item()
             pbar.set_postfix({'loss': loss.item()})
@@ -50,13 +63,17 @@ def train_ncsn(model, dataloader, config, plot_callback=None):
         avg_loss /= len(dataloader)
         print(f"Epoch {epoch + 1} Average Loss: {avg_loss:.5f}")
 
+        # Step the LR scheduler
+        scheduler.step()
+        wandb.log({"learning_rate": optimizer.param_groups[0]['lr']})
+
         # --- SAMPLING & VISUALIZATION STEP ---
         if (epoch + 1) % config.sample_interval == 0:
             print(f"Epoch {epoch + 1}: Running Sampling...")
 
-            # Generate samples (Model handles eval/train mode inside, but let's be safe)
+            # Sample from EMA model for better quality
             samples = annealed_langevin_dynamics(
-                model, sigmas, config, n_samples=config.n_samples_to_show
+                ema.shadow, sigmas, config, n_samples=config.n_samples_to_show
             )
 
             # 1. Log to WandB

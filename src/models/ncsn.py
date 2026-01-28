@@ -1,3 +1,4 @@
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -42,36 +43,42 @@ class ScoreNet(nn.Module):
         
         # 2. Downsampling (Encoder)
         self.conv_in = nn.Conv2d(channels, ch, kernel_size=3, stride=1, padding=1)
-        
+
         self.down1 = nn.ModuleList([
             nn.Conv2d(ch, ch * ch_mult[0], 3, 2, 1),
-            Dense(ch, ch * ch_mult[0]) # Projection for sigma
+            Dense(ch, ch * ch_mult[0]),
+            nn.GroupNorm(32, ch * ch_mult[0]),
         ])
-        
+
         self.down2 = nn.ModuleList([
             nn.Conv2d(ch * ch_mult[0], ch * ch_mult[1], 3, 2, 1),
-            Dense(ch, ch * ch_mult[1])
+            Dense(ch, ch * ch_mult[1]),
+            nn.GroupNorm(32, ch * ch_mult[1]),
         ])
-        
+
         self.down3 = nn.ModuleList([
             nn.Conv2d(ch * ch_mult[1], ch * ch_mult[2], 3, 2, 1),
-            Dense(ch, ch * ch_mult[2])
+            Dense(ch, ch * ch_mult[2]),
+            nn.GroupNorm(32, ch * ch_mult[2]),
         ])
-        
+
         # 3. Upsampling (Decoder) with Skip Connections
         self.up1 = nn.ModuleList([
             nn.ConvTranspose2d(ch * ch_mult[2], ch * ch_mult[1], 4, 2, 1),
-            Dense(ch, ch * ch_mult[1])
+            Dense(ch, ch * ch_mult[1]),
+            nn.GroupNorm(32, ch * ch_mult[1]),
         ])
-        
+
         self.up2 = nn.ModuleList([
-            nn.ConvTranspose2d(ch * ch_mult[1] * 2, ch * ch_mult[0], 4, 2, 1), # *2 for skip concat
-            Dense(ch, ch * ch_mult[0])
+            nn.ConvTranspose2d(ch * ch_mult[1] * 2, ch * ch_mult[0], 4, 2, 1),
+            Dense(ch, ch * ch_mult[0]),
+            nn.GroupNorm(32, ch * ch_mult[0]),
         ])
-        
+
         self.up3 = nn.ModuleList([
             nn.ConvTranspose2d(ch * ch_mult[0] * 2, ch, 4, 2, 1),
-            Dense(ch, ch)
+            Dense(ch, ch),
+            nn.GroupNorm(32, ch),
         ])
         
         self.conv_out = nn.Conv2d(ch * 2, channels, 3, 1, 1)
@@ -83,26 +90,32 @@ class ScoreNet(nn.Module):
         
         # --- Encoder ---
         h1 = self.conv_in(x)
-        
-        # Block 1
-        h2 = self.act(self.down1[0](h1) + self.down1[1](embed))
-        
+
+        # Block 1: conv -> GroupNorm -> (+ embed) -> activation
+        h2 = self.down1[2](self.down1[0](h1))
+        h2 = self.act(h2 + self.down1[1](embed))
+
         # Block 2
-        h3 = self.act(self.down2[0](h2) + self.down2[1](embed))
-        
+        h3 = self.down2[2](self.down2[0](h2))
+        h3 = self.act(h3 + self.down2[1](embed))
+
         # Block 3
-        h4 = self.act(self.down3[0](h3) + self.down3[1](embed))
-        
+        h4 = self.down3[2](self.down3[0](h3))
+        h4 = self.act(h4 + self.down3[1](embed))
+
         # --- Decoder ---
         # Up 1
-        h_up1 = self.act(self.up1[0](h4) + self.up1[1](embed))
-        
+        h_up1 = self.up1[2](self.up1[0](h4))
+        h_up1 = self.act(h_up1 + self.up1[1](embed))
+
         # Up 2 (Concatenate with h3)
-        h_up2 = self.act(self.up2[0](torch.cat([h_up1, h3], dim=1)) + self.up2[1](embed))
-        
+        h_up2 = self.up2[2](self.up2[0](torch.cat([h_up1, h3], dim=1)))
+        h_up2 = self.act(h_up2 + self.up2[1](embed))
+
         # Up 3 (Concatenate with h2)
-        h_up3 = self.act(self.up3[0](torch.cat([h_up2, h2], dim=1)) + self.up3[1](embed))
-        
+        h_up3 = self.up3[2](self.up3[0](torch.cat([h_up2, h2], dim=1)))
+        h_up3 = self.act(h_up3 + self.up3[1](embed))
+
         # Final Output (Concatenate with h1)
         out = self.conv_out(torch.cat([h_up3, h1], dim=1))
         
