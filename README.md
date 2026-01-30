@@ -169,7 +169,9 @@ python main_iwae.py --k 50 --epochs 150 --batch_size 8
 
 Best loss: **288.3** (run: `ncsn-baseline-higher-scales`)
 
-WandB: [NCSN experiments](https://wandb.ai/gbend22-free-university-of-tbilisi-/cifar10-generative-models/overview)
+WandB Experiments: [NCSN experiments](https://wandb.ai/gbend22-free-university-of-tbilisi-/cifar10-generative-models/overview)
+
+WandB Report: [NCSN Report](https://wandb.ai/gbend22-free-university-of-tbilisi-/cifar10-generative-models/reports/Noise-Conditional-Score-Networks-on-CIFAR-10--VmlldzoxNTc5NTc2OQ)
 
 ### Beta-VAE
 
