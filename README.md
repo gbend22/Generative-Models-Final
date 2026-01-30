@@ -7,7 +7,7 @@ A PyTorch-based project implementing and comparing two generative modeling appro
 | Member                | GitHub Handle |
 |-----------------------|--------------|
 | Giorgi Bendianishvili | `gbend22`    |
-| Givi Modebadze        | `gmode`      |
+| Givi Modebadze        | `Givi-Modebadze`      |
 
 ## Project Structure
 
