@@ -207,6 +207,8 @@ WandB: [Beta-VAE & IWAE experiments](https://wandb.ai/gmode-free-university-of-t
 
 ---
 
+wandb report link for Beta-VAE and IWAE: https://wandb.ai/gmode-free-university-of-tbilisi-/cifar10-generative-models/reports/Generative-Models-on-CIFAR-10-Beta-VAE-and-IWAE--VmlldzoxNTc5NzYzMA?accessToken=dzig5jj0487jndn2vbgw8bydpftu01tysb70357raf3w6krfj8b629gwr5j7os7m
+
 ## References
 
 - Song, Y., & Ermon, S. (2019). *Generative Modeling by Estimating Gradients of the Data Distribution.* NeurIPS. [arXiv:1907.05600](https://arxiv.org/abs/1907.05600)
