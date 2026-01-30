@@ -14,7 +14,7 @@ class NCSNConfig:
     # NCSN specific
     sigma_start = 1.0  # Paper: sigma_1 = 1.0 (was 50.0 - this was the main bug!)
     sigma_end = 0.01   # Paper: sigma_L = 0.01
-    num_scales = 10
+    num_scales = 50    # Increased from 10 for smoother annealing
 
     # Sampling / Annealed Langevin Dynamics
     n_steps_per_scale = 100  # Paper: T = 100

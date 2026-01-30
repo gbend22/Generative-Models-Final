@@ -24,11 +24,6 @@ def train_ncsn(model, dataloader, config, plot_callback=None):
     model = model.to(device)
     optimizer = optim.Adam(model.parameters(), lr=config.lr)
 
-    # Learning rate schedule: warmup + cosine decay
-    warmup_epochs = 5
-    warmup_scheduler = LinearLR(optimizer, start_factor=1e-2, end_factor=1.0, total_iters=warmup_epochs)
-    cosine_scheduler = CosineAnnealingLR(optimizer, T_max=config.n_epochs - warmup_epochs, eta_min=1e-5)
-    scheduler = SequentialLR(optimizer, schedulers=[warmup_scheduler, cosine_scheduler], milestones=[warmup_epochs])
 
     # EMA for stable sampling
     ema = EMAHelper(model, decay=0.999)
@@ -63,9 +58,6 @@ def train_ncsn(model, dataloader, config, plot_callback=None):
         avg_loss /= len(dataloader)
         print(f"Epoch {epoch + 1} Average Loss: {avg_loss:.5f}")
 
-        # Step the LR scheduler
-        scheduler.step()
-        wandb.log({"learning_rate": optimizer.param_groups[0]['lr']})
 
         # --- SAMPLING & VISUALIZATION STEP ---
         if (epoch + 1) % config.sample_interval == 0:
